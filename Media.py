@@ -1,13 +1,33 @@
 import streamlit as st
 import pandas as pd
 from datetime import datetime
+from io import BytesIO
+from reportlab.lib.pagesizes import A4
+from reportlab.pdfgen import canvas
 
 EXCEL_FILE = "Media.xlsx"
 
-# --- CONFIGURE PAGE ---
-st.set_page_config(page_title="🎥 Media Team Dashboard", layout="wide")
+# --- PAGE CONFIG ---
+st.set_page_config(page_title="WRPF Media Dashboard", layout="wide")
 
-st.title("🎬 Media Team Dashboard")
+st.markdown("""
+    <style>
+        html, body, [class*="css"]  {
+            font-family: 'Arial', sans-serif;
+        }
+        .stApp {
+            background-color: #ffffff;
+        }
+        h1 {
+            color: #D62828;
+        }
+        .sidebar .sidebar-content {
+            background-color: #000000;
+        }
+    </style>
+""", unsafe_allow_html=True)
+
+st.title("📸 WRPF UK Media Dashboard")
 
 # --- LOAD DATA ---
 @st.cache_data
@@ -18,7 +38,7 @@ def load_data():
 
 df = load_data()
 
-# --- TEAM MEMBERS LIST ---
+# --- TEAM MEMBERS ---
 team_members = [
     "Alex Hulme",
     "Mike Melladay",
@@ -27,20 +47,14 @@ team_members = [
     "Emma Wilding"
 ]
 
-# --- SIDEBAR MENU ---
-st.sidebar.markdown("## 🎛️ Dashboard Controls")
-st.sidebar.markdown("Filter and search scheduled events.")
-
-# Filter by team member
+# --- SIDEBAR FILTER ---
+st.sidebar.markdown("## 🎛️ Filters & Search")
 selected_member = st.sidebar.selectbox("👤 Select Team Member", ["All"] + team_members)
-
-# Search bar
-search_query = st.sidebar.text_input("🔍 Search (venue, postcode, type...)")
+search_query = st.sidebar.text_input("🔍 Search (venue, postcode, media type)")
 
 st.sidebar.markdown("---")
 st.sidebar.markdown("## 🗓️ Upcoming Events")
 
-# Calendar preview (next 5)
 upcoming = df[df["Event Date"] >= pd.Timestamp.today()].sort_values("Event Date").head(5)
 if upcoming.empty:
     st.sidebar.markdown("_No upcoming events._")
@@ -54,10 +68,8 @@ else:
 
 # --- APPLY FILTERS ---
 filtered_df = df.copy()
-
 if selected_member != "All":
     filtered_df = filtered_df[filtered_df["Cover"] == selected_member]
-
 if search_query:
     mask = filtered_df.apply(lambda row: search_query.lower() in str(row).lower(), axis=1)
     filtered_df = filtered_df[mask]
@@ -67,9 +79,8 @@ with st.expander("🔒 Edit Mode (Password Required)", expanded=False):
     password = st.text_input("Enter password", type="password")
     edit_mode = password == st.secrets.get("media_dashboard_password", "")
 
-# --- DISPLAY EVENTS TABLE ---
+# --- DISPLAY TABLE ---
 st.subheader("📋 Scheduled Events")
-
 if edit_mode:
     edited_df = st.data_editor(
         filtered_df,
@@ -80,15 +91,39 @@ if edit_mode:
 else:
     st.dataframe(filtered_df, use_container_width=True)
 
-# --- EXPORT CSV ---
+# --- EXPORT TO PDF ---
+def generate_pdf(dataframe):
+    buffer = BytesIO()
+    p = canvas.Canvas(buffer, pagesize=A4)
+    width, height = A4
+
+    p.setFont("Helvetica-Bold", 14)
+    p.drawString(50, height - 40, "WRPF UK Media Event Schedule")
+
+    p.setFont("Helvetica", 10)
+    y = height - 70
+    for i, row in dataframe.iterrows():
+        event_line = f"{row['Event Date'].strftime('%d/%m/%Y')} | {row['Start Time']} | {row['Venue']} | {row['Post code']} | {row['Cover']} | {row['Media Type']}"
+        p.drawString(50, y, event_line)
+        y -= 15
+        if y < 40:
+            p.showPage()
+            y = height - 50
+
+    p.save()
+    buffer.seek(0)
+    return buffer
+
+pdf_data = generate_pdf(filtered_df)
+
 st.download_button(
-    label="⬇️ Download CSV",
-    data=filtered_df.to_csv(index=False).encode("utf-8"),
-    file_name="media_schedule.csv",
-    mime="text/csv"
+    label="⬇️ Export to PDF",
+    data=pdf_data,
+    file_name="WRPF_Media_Schedule.pdf",
+    mime="application/pdf"
 )
 
-# --- ADD NEW EVENT FORM ---
+# --- ADD EVENT FORM ---
 if edit_mode:
     st.subheader("➕ Add New Event")
     with st.form("add_event_form", clear_on_submit=True):
