@@ -2,31 +2,16 @@ import streamlit as st
 import pandas as pd
 from datetime import datetime
 from io import BytesIO
+from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, Image
+from reportlab.lib import colors
 from reportlab.lib.pagesizes import A4
-from reportlab.pdfgen import canvas
+from reportlab.lib.styles import getSampleStyleSheet
 
 EXCEL_FILE = "Media.xlsx"
+LOGO_FILE = "wrpf_logo.png"  # Make sure this file exists in the same directory
 
 # --- PAGE CONFIG ---
 st.set_page_config(page_title="WRPF Media Dashboard", layout="wide")
-
-st.markdown("""
-    <style>
-        html, body, [class*="css"]  {
-            font-family: 'Arial', sans-serif;
-        }
-        .stApp {
-            background-color: #ffffff;
-        }
-        h1 {
-            color: #D62828;
-        }
-        .sidebar .sidebar-content {
-            background-color: #000000;
-        }
-    </style>
-""", unsafe_allow_html=True)
-
 st.title("📸 WRPF UK Media Dashboard")
 
 # --- LOAD DATA ---
@@ -47,8 +32,9 @@ team_members = [
     "Emma Wilding"
 ]
 
-# --- SIDEBAR FILTER ---
+# --- SIDEBAR ---
 st.sidebar.markdown("## 🎛️ Filters & Search")
+
 selected_member = st.sidebar.selectbox("👤 Select Team Member", ["All"] + team_members)
 search_query = st.sidebar.text_input("🔍 Search (venue, postcode, media type)")
 
@@ -66,21 +52,23 @@ else:
             f"🎥 {row['Media Type']} – {row['Cover']}"
         )
 
-# --- APPLY FILTERS ---
+# --- FILTER DATA ---
 filtered_df = df.copy()
 if selected_member != "All":
     filtered_df = filtered_df[filtered_df["Cover"] == selected_member]
+
 if search_query:
     mask = filtered_df.apply(lambda row: search_query.lower() in str(row).lower(), axis=1)
     filtered_df = filtered_df[mask]
 
-# --- PASSWORD FOR EDITING ---
+# --- PASSWORD PROTECTION ---
 with st.expander("🔒 Edit Mode (Password Required)", expanded=False):
     password = st.text_input("Enter password", type="password")
     edit_mode = password == st.secrets.get("media_dashboard_password", "")
 
 # --- DISPLAY TABLE ---
 st.subheader("📋 Scheduled Events")
+
 if edit_mode:
     edited_df = st.data_editor(
         filtered_df,
@@ -91,39 +79,58 @@ if edit_mode:
 else:
     st.dataframe(filtered_df, use_container_width=True)
 
-# --- EXPORT TO PDF ---
+# --- GENERATE PDF FUNCTION ---
 def generate_pdf(dataframe):
     buffer = BytesIO()
-    p = canvas.Canvas(buffer, pagesize=A4)
-    width, height = A4
+    doc = SimpleDocTemplate(buffer, pagesize=A4, rightMargin=30, leftMargin=30, topMargin=40, bottomMargin=30)
 
-    p.setFont("Helvetica-Bold", 14)
-    p.drawString(50, height - 40, "WRPF UK Media Event Schedule")
+    elements = []
+    styles = getSampleStyleSheet()
 
-    p.setFont("Helvetica", 10)
-    y = height - 70
-    for i, row in dataframe.iterrows():
-        event_line = f"{row['Event Date'].strftime('%d/%m/%Y')} | {row['Start Time']} | {row['Venue']} | {row['Post code']} | {row['Cover']} | {row['Media Type']}"
-        p.drawString(50, y, event_line)
-        y -= 15
-        if y < 40:
-            p.showPage()
-            y = height - 50
+    # Add WRPF logo
+    try:
+        logo = Image(LOGO_FILE, width=120, height=35)
+        elements.append(logo)
+        elements.append(Spacer(1, 12))
+    except Exception:
+        st.warning("⚠️ WRPF logo not found or failed to load.")
 
-    p.save()
+    # Title
+    title = Paragraph("WRPF UK Media Event Schedule", styles['Title'])
+    elements.append(title)
+    elements.append(Spacer(1, 12))
+
+    # Format DataFrame
+    display_df = dataframe.copy()
+    display_df["Event Date"] = display_df["Event Date"].dt.strftime("%d/%m/%Y")
+    table_data = [list(display_df.columns)] + display_df.astype(str).values.tolist()
+
+    # Table Style
+    table = Table(table_data, repeatRows=1)
+    table.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#D62828')),
+        ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
+        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+        ('FONTSIZE', (0, 0), (-1, 0), 10),
+        ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+        ('GRID', (0, 0), (-1, -1), 0.25, colors.black),
+        ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.whitesmoke, colors.lightgrey])
+    ]))
+
+    elements.append(table)
+    doc.build(elements)
     buffer.seek(0)
     return buffer
 
-pdf_data = generate_pdf(filtered_df)
-
+# --- EXPORT TO PDF ---
 st.download_button(
     label="⬇️ Export to PDF",
-    data=pdf_data,
+    data=generate_pdf(filtered_df),
     file_name="WRPF_Media_Schedule.pdf",
     mime="application/pdf"
 )
 
-# --- ADD EVENT FORM ---
+# --- ADD NEW EVENT FORM ---
 if edit_mode:
     st.subheader("➕ Add New Event")
     with st.form("add_event_form", clear_on_submit=True):
@@ -154,7 +161,7 @@ if edit_mode:
             df.to_excel(EXCEL_FILE, index=False)
             st.success("✅ New event added. Please refresh to see it in the table.")
 
-# --- SAVE CHANGES BUTTON ---
+# --- SAVE CHANGES TO EXCEL ---
 if edit_mode and st.button("💾 Save Changes to File"):
     if selected_member != "All":
         df.loc[df["Cover"] == selected_member] = edited_df
