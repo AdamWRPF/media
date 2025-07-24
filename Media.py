@@ -4,14 +4,37 @@ from datetime import datetime
 
 EXCEL_FILE = "Media.xlsx"
 
-st.set_page_config(page_title="Media Team Dashboard", layout="wide")
-st.title("🎥 Media Team Dashboard")
+# --- CONFIGURE PAGE ---
+st.set_page_config(page_title="🎥 Media Team Dashboard", layout="wide")
+
+# Dark theme enforcement
+st.markdown("""
+    <style>
+        [data-testid="stAppViewContainer"] {
+            background-color: #0e1117;
+            color: #fafafa;
+        }
+        [data-testid="stSidebar"] {
+            background-color: #161b22;
+        }
+        .stButton>button {
+            background-color: #238636;
+            color: white;
+        }
+        .stTextInput>div>input, .stSelectbox>div>div {
+            background-color: #21262d;
+            color: white;
+        }
+    </style>
+""", unsafe_allow_html=True)
+
+st.title("🎬 Media Team Dashboard")
 
 # --- LOAD DATA ---
 @st.cache_data
 def load_data():
     df = pd.read_excel(EXCEL_FILE)
-    df["Event Date"] = pd.to_datetime(df["Event Date"], dayfirst=True).dt.strftime("%d/%m/%Y")
+    df["Event Date"] = pd.to_datetime(df["Event Date"], dayfirst=True)
     return df
 
 df = load_data()
@@ -26,19 +49,35 @@ team_members = [
 ]
 
 st.sidebar.header("📌 Filters")
+
+# Filter by member
 selected_member = st.sidebar.selectbox("Filter by Team Member", ["All"] + team_members)
 
+# Search bar
+search_query = st.sidebar.text_input("🔍 Search events (venue, postcode...)")
+
+# Apply filters
+filtered_df = df.copy()
+
 if selected_member != "All":
-    filtered_df = df[df["Cover"] == selected_member]
-else:
-    filtered_df = df
+    filtered_df = filtered_df[filtered_df["Cover"] == selected_member]
+
+if search_query:
+    mask = filtered_df.apply(lambda row: search_query.lower() in str(row).lower(), axis=1)
+    filtered_df = filtered_df[mask]
+
+# --- CALENDAR VIEW ---
+st.sidebar.markdown("### 🗓️ Upcoming Events")
+upcoming = df[df["Event Date"] >= pd.Timestamp.today()].sort_values("Event Date").head(5)
+for _, row in upcoming.iterrows():
+    st.sidebar.markdown(f"- **{row['Event Date'].strftime('%d %b')}** – {row['Venue']} ({row['Cover']})")
 
 # --- PASSWORD FOR EDITING ---
 with st.expander("🔒 Edit Mode (Password Required)", expanded=False):
     password = st.text_input("Enter password", type="password")
     edit_mode = password == st.secrets.get("media_dashboard_password", "")
 
-# --- DISPLAY EVENT TABLE ---
+# --- DISPLAY EVENTS TABLE ---
 st.subheader("📋 Scheduled Events")
 
 if edit_mode:
@@ -51,7 +90,15 @@ if edit_mode:
 else:
     st.dataframe(filtered_df, use_container_width=True)
 
-# --- ADD NEW ENTRY FORM ---
+# --- EXPORT CSV ---
+st.download_button(
+    label="⬇️ Download CSV",
+    data=filtered_df.to_csv(index=False).encode("utf-8"),
+    file_name="media_schedule.csv",
+    mime="text/csv"
+)
+
+# --- ADD NEW EVENT FORM ---
 if edit_mode:
     st.subheader("➕ Add New Event")
     with st.form("add_event_form", clear_on_submit=True):
@@ -70,7 +117,7 @@ if edit_mode:
 
         if submitted:
             new_row = {
-                "Event Date": new_date.strftime("%d/%m/%Y"),  # Store as UK format
+                "Event Date": new_date,
                 "Start Time": new_time,
                 "Venue": new_venue,
                 "Post code": new_postcode,
@@ -80,7 +127,7 @@ if edit_mode:
             }
             df = pd.concat([df, pd.DataFrame([new_row])], ignore_index=True)
             df.to_excel(EXCEL_FILE, index=False)
-            st.success("✅ New event added. Please refresh to view in the main table.")
+            st.success("✅ New event added. Please refresh to see it in the table.")
 
 # --- SAVE CHANGES ---
 if edit_mode and st.button("💾 Save Changes to File"):
@@ -90,4 +137,4 @@ if edit_mode and st.button("💾 Save Changes to File"):
         df = edited_df
 
     df.to_excel(EXCEL_FILE, index=False)
-    st.success("✅ Data saved successfully.")
+    st.success("✅ Changes saved to file.")
