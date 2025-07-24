@@ -7,7 +7,7 @@ EXCEL_FILE = "Media.xlsx"
 # --- CONFIGURE PAGE ---
 st.set_page_config(page_title="🎥 Media Team Dashboard", layout="wide")
 
-# Dark theme enforcement
+# Dark theme enforcement and styling
 st.markdown("""
     <style>
         [data-testid="stAppViewContainer"] {
@@ -39,7 +39,7 @@ def load_data():
 
 df = load_data()
 
-# --- SIDEBAR FILTER ---
+# --- TEAM MEMBERS LIST ---
 team_members = [
     "Alex Hulme",
     "Mike Melladay",
@@ -48,15 +48,32 @@ team_members = [
     "Emma Wilding"
 ]
 
-st.sidebar.header("📌 Filters")
+# --- SIDEBAR MENU ---
+st.sidebar.markdown("## 🎛️ Dashboard Controls")
+st.sidebar.markdown("Filter and search scheduled events.")
 
-# Filter by member
-selected_member = st.sidebar.selectbox("Filter by Team Member", ["All"] + team_members)
+# Filter by team member
+selected_member = st.sidebar.selectbox("👤 Select Team Member", ["All"] + team_members)
 
 # Search bar
-search_query = st.sidebar.text_input("🔍 Search events (venue, postcode...)")
+search_query = st.sidebar.text_input("🔍 Search (venue, postcode, type...)")
 
-# Apply filters
+st.sidebar.markdown("---")
+st.sidebar.markdown("## 🗓️ Upcoming Events")
+
+# Calendar preview (next 5)
+upcoming = df[df["Event Date"] >= pd.Timestamp.today()].sort_values("Event Date").head(5)
+if upcoming.empty:
+    st.sidebar.markdown("_No upcoming events._")
+else:
+    for _, row in upcoming.iterrows():
+        st.sidebar.markdown(
+            f"**{row['Event Date'].strftime('%d %b')}**  \n"
+            f"📍 {row['Venue']}  \n"
+            f"🎥 {row['Media Type']} – {row['Cover']}"
+        )
+
+# --- APPLY FILTERS ---
 filtered_df = df.copy()
 
 if selected_member != "All":
@@ -65,12 +82,6 @@ if selected_member != "All":
 if search_query:
     mask = filtered_df.apply(lambda row: search_query.lower() in str(row).lower(), axis=1)
     filtered_df = filtered_df[mask]
-
-# --- CALENDAR VIEW ---
-st.sidebar.markdown("### 🗓️ Upcoming Events")
-upcoming = df[df["Event Date"] >= pd.Timestamp.today()].sort_values("Event Date").head(5)
-for _, row in upcoming.iterrows():
-    st.sidebar.markdown(f"- **{row['Event Date'].strftime('%d %b')}** – {row['Venue']} ({row['Cover']})")
 
 # --- PASSWORD FOR EDITING ---
 with st.expander("🔒 Edit Mode (Password Required)", expanded=False):
@@ -129,7 +140,7 @@ if edit_mode:
             df.to_excel(EXCEL_FILE, index=False)
             st.success("✅ New event added. Please refresh to see it in the table.")
 
-# --- SAVE CHANGES ---
+# --- SAVE CHANGES BUTTON ---
 if edit_mode and st.button("💾 Save Changes to File"):
     if selected_member != "All":
         df.loc[df["Cover"] == selected_member] = edited_df
