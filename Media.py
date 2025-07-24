@@ -8,7 +8,7 @@ from reportlab.lib.pagesizes import A4, landscape
 from reportlab.lib.styles import getSampleStyleSheet
 
 EXCEL_FILE = "Media.xlsx"
-LOGO_FILE = "wrpf_logo.png"  # Ensure this file exists in the same folder
+LOGO_FILE = "wrpf_logo.png"
 
 # --- PAGE CONFIG ---
 st.set_page_config(page_title="WRPF Media Dashboard", layout="wide")
@@ -61,7 +61,7 @@ if search_query:
     mask = filtered_df.apply(lambda row: search_query.lower() in str(row).lower(), axis=1)
     filtered_df = filtered_df[mask]
 
-# --- FORMAT DATE FOR DISPLAY (UK format) ---
+# --- FORMAT FOR DISPLAY ---
 filtered_df_display = filtered_df.copy()
 filtered_df_display["Event Date"] = filtered_df_display["Event Date"].dt.strftime("%d/%m/%Y")
 
@@ -70,24 +70,30 @@ with st.expander("🔒 Edit Mode (Password Required)", expanded=False):
     password = st.text_input("Enter password", type="password")
     edit_mode = password == st.secrets.get("media_dashboard_password", "")
 
-# --- DISPLAY TABLE ---
+# --- DISPLAY + EDIT TABLE ---
 st.subheader("📋 Scheduled Events")
 
 if edit_mode:
+    st.markdown("🛠️ Editable Table (actual data)")
     edited_df = st.data_editor(
-        filtered_df_display,
+        filtered_df,
         num_rows="dynamic",
         use_container_width=True,
         key="editor"
     )
+
+    # Optional preview with UK date format
+    preview_df = edited_df.copy()
+    preview_df["Event Date"] = pd.to_datetime(preview_df["Event Date"]).dt.strftime("%d/%m/%Y")
+    st.caption("🔍 Preview (formatted)")
+    st.dataframe(preview_df, use_container_width=True)
 else:
     st.dataframe(filtered_df_display, use_container_width=True)
 
-# --- GENERATE PDF FUNCTION (LANDSCAPE, FIT TO WIDTH) ---
+# --- GENERATE PDF FUNCTION ---
 def generate_pdf(dataframe):
     buffer = BytesIO()
 
-    # Set landscape A4
     doc = SimpleDocTemplate(
         buffer,
         pagesize=landscape(A4),
@@ -120,13 +126,11 @@ def generate_pdf(dataframe):
 
     table_data = [list(display_df.columns)] + display_df.astype(str).values.tolist()
 
-    # Dynamically fit columns
+    # Dynamic column widths
     num_columns = len(display_df.columns)
-    page_width = landscape(A4)[0] - 60  # full width minus margins
-    col_width = page_width / num_columns
-    col_widths = [col_width] * num_columns
+    page_width = landscape(A4)[0] - 60
+    col_widths = [page_width / num_columns] * num_columns
 
-    # Create styled table
     table = Table(table_data, repeatRows=1, colWidths=col_widths)
     table.setStyle(TableStyle([
         ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#D62828')),
@@ -182,10 +186,11 @@ if edit_mode:
             df.to_excel(EXCEL_FILE, index=False)
             st.success("✅ New event added. Please refresh to see it in the table.")
 
-# --- SAVE CHANGES TO EXCEL ---
+# --- SAVE EDITED DATA ---
 if edit_mode and st.button("💾 Save Changes to File"):
     if selected_member != "All":
-        df.loc[df["Cover"] == selected_member] = edited_df
+        original_indices = df[df["Cover"] == selected_member].index
+        df.loc[original_indices] = edited_df.reset_index(drop=True)
     else:
         df = edited_df
 
