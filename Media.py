@@ -8,7 +8,7 @@ from reportlab.lib.pagesizes import A4
 from reportlab.lib.styles import getSampleStyleSheet
 
 EXCEL_FILE = "Media.xlsx"
-LOGO_FILE = "wrpf_logo.png"  # Make sure this file exists in the same directory
+LOGO_FILE = "wrpf_logo.png"  # Ensure this image is in the same folder
 
 # --- PAGE CONFIG ---
 st.set_page_config(page_title="WRPF Media Dashboard", layout="wide")
@@ -47,7 +47,7 @@ if upcoming.empty:
 else:
     for _, row in upcoming.iterrows():
         st.sidebar.markdown(
-            f"**{row['Event Date'].strftime('%d %b')}**  \n"
+            f"**{row['Event Date'].strftime('%d/%m/%Y')}**  \n"
             f"📍 {row['Venue']}  \n"
             f"🎥 {row['Media Type']} – {row['Cover']}"
         )
@@ -61,6 +61,10 @@ if search_query:
     mask = filtered_df.apply(lambda row: search_query.lower() in str(row).lower(), axis=1)
     filtered_df = filtered_df[mask]
 
+# --- FORMAT DATE FOR DISPLAY (UK format without time) ---
+filtered_df_display = filtered_df.copy()
+filtered_df_display["Event Date"] = filtered_df_display["Event Date"].dt.strftime("%d/%m/%Y")
+
 # --- PASSWORD PROTECTION ---
 with st.expander("🔒 Edit Mode (Password Required)", expanded=False):
     password = st.text_input("Enter password", type="password")
@@ -71,13 +75,13 @@ st.subheader("📋 Scheduled Events")
 
 if edit_mode:
     edited_df = st.data_editor(
-        filtered_df,
+        filtered_df_display,
         num_rows="dynamic",
         use_container_width=True,
         key="editor"
     )
 else:
-    st.dataframe(filtered_df, use_container_width=True)
+    st.dataframe(filtered_df_display, use_container_width=True)
 
 # --- GENERATE PDF FUNCTION ---
 def generate_pdf(dataframe):
@@ -102,7 +106,8 @@ def generate_pdf(dataframe):
 
     # Format DataFrame
     display_df = dataframe.copy()
-    display_df["Event Date"] = display_df["Event Date"].dt.strftime("%d/%m/%Y")
+    if display_df["Event Date"].dtype != object:
+        display_df["Event Date"] = display_df["Event Date"].dt.strftime("%d/%m/%Y")
     table_data = [list(display_df.columns)] + display_df.astype(str).values.tolist()
 
     # Table Style
