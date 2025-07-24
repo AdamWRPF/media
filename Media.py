@@ -7,27 +7,6 @@ EXCEL_FILE = "Media.xlsx"
 # --- CONFIGURE PAGE ---
 st.set_page_config(page_title="🎥 Media Team Dashboard", layout="wide")
 
-# Dark theme enforcement and styling
-st.markdown("""
-    <style>
-        [data-testid="stAppViewContainer"] {
-            background-color: #0e1117;
-            color: #fafafa;
-        }
-        [data-testid="stSidebar"] {
-            background-color: #161b22;
-        }
-        .stButton>button {
-            background-color: #238636;
-            color: white;
-        }
-        .stTextInput>div>input, .stSelectbox>div>div {
-            background-color: #21262d;
-            color: white;
-        }
-    </style>
-""", unsafe_allow_html=True)
-
 st.title("🎬 Media Team Dashboard")
 
 # --- LOAD DATA ---
