@@ -4,11 +4,11 @@ from datetime import datetime
 from io import BytesIO
 from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, Image
 from reportlab.lib import colors
-from reportlab.lib.pagesizes import A4
+from reportlab.lib.pagesizes import A4, landscape
 from reportlab.lib.styles import getSampleStyleSheet
 
 EXCEL_FILE = "Media.xlsx"
-LOGO_FILE = "wrpf_logo.png"  # Ensure this image is in the same folder
+LOGO_FILE = "wrpf_logo.png"  # Ensure this file exists in the same folder
 
 # --- PAGE CONFIG ---
 st.set_page_config(page_title="WRPF Media Dashboard", layout="wide")
@@ -61,7 +61,7 @@ if search_query:
     mask = filtered_df.apply(lambda row: search_query.lower() in str(row).lower(), axis=1)
     filtered_df = filtered_df[mask]
 
-# --- FORMAT DATE FOR DISPLAY (UK format without time) ---
+# --- FORMAT DATE FOR DISPLAY (UK format) ---
 filtered_df_display = filtered_df.copy()
 filtered_df_display["Event Date"] = filtered_df_display["Event Date"].dt.strftime("%d/%m/%Y")
 
@@ -83,10 +83,19 @@ if edit_mode:
 else:
     st.dataframe(filtered_df_display, use_container_width=True)
 
-# --- GENERATE PDF FUNCTION ---
+# --- GENERATE PDF FUNCTION (LANDSCAPE, FIT TO WIDTH) ---
 def generate_pdf(dataframe):
     buffer = BytesIO()
-    doc = SimpleDocTemplate(buffer, pagesize=A4, rightMargin=30, leftMargin=30, topMargin=40, bottomMargin=30)
+
+    # Set landscape A4
+    doc = SimpleDocTemplate(
+        buffer,
+        pagesize=landscape(A4),
+        rightMargin=30,
+        leftMargin=30,
+        topMargin=40,
+        bottomMargin=30
+    )
 
     elements = []
     styles = getSampleStyleSheet()
@@ -104,14 +113,21 @@ def generate_pdf(dataframe):
     elements.append(title)
     elements.append(Spacer(1, 12))
 
-    # Format DataFrame
+    # Format Event Date
     display_df = dataframe.copy()
     if display_df["Event Date"].dtype != object:
         display_df["Event Date"] = display_df["Event Date"].dt.strftime("%d/%m/%Y")
+
     table_data = [list(display_df.columns)] + display_df.astype(str).values.tolist()
 
-    # Table Style
-    table = Table(table_data, repeatRows=1)
+    # Dynamically fit columns
+    num_columns = len(display_df.columns)
+    page_width = landscape(A4)[0] - 60  # full width minus margins
+    col_width = page_width / num_columns
+    col_widths = [col_width] * num_columns
+
+    # Create styled table
+    table = Table(table_data, repeatRows=1, colWidths=col_widths)
     table.setStyle(TableStyle([
         ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#D62828')),
         ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
