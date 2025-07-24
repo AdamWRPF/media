@@ -16,21 +16,29 @@ def load_data():
 
 df = load_data()
 
+# --- SIDEBAR FILTER ---
+team_members = [
+    "Alex Hulme",
+    "Mike Melladay",
+    "Labibur Rahman",
+    "Sam Taylor",
+    "Emma Wilding"
+]
+
+st.sidebar.header("📌 Filters")
+selected_member = st.sidebar.selectbox("Filter by Team Member", ["All"] + team_members)
+
+if selected_member != "All":
+    filtered_df = df[df["Cover"] == selected_member]
+else:
+    filtered_df = df
+
 # --- PASSWORD FOR EDITING ---
 with st.expander("🔒 Edit Mode (Password Required)", expanded=False):
     password = st.text_input("Enter password", type="password")
     edit_mode = password == st.secrets.get("media_dashboard_password", "")
 
-# --- COVER FILTER ---
-team_members = df["Cover"].dropna().unique().tolist()
-cover_filter = st.selectbox("🎯 Filter by Cover (Team Member)", ["All"] + sorted(team_members))
-
-if cover_filter != "All":
-    filtered_df = df[df["Cover"] == cover_filter]
-else:
-    filtered_df = df
-
-# --- DISPLAY EVENTS ---
+# --- DISPLAY EVENT TABLE ---
 st.subheader("📋 Scheduled Events")
 
 if edit_mode:
@@ -41,11 +49,7 @@ if edit_mode:
         key="editor"
     )
 else:
-    st.dataframe(
-        filtered_df,
-        use_container_width=True,
-        hide_index=True
-    )
+    st.dataframe(filtered_df, use_container_width=True)
 
 # --- ADD NEW ENTRY FORM ---
 if edit_mode:
@@ -58,9 +62,7 @@ if edit_mode:
             new_venue = st.text_input("Venue")
             new_postcode = st.text_input("Post Code")
         with col2:
-            new_cover = st.selectbox("Cover", [
-                "Alex Hulme", "Mike Melladay", "Labibur Rahman", "Sam Taylor", "Emma Wilding"
-            ])
+            new_cover = st.selectbox("Cover", team_members)
             new_type = st.selectbox("Media Type", ["Photography", "Video", "Other"])
             new_link = st.text_input("Website", value="https://")
 
@@ -68,7 +70,7 @@ if edit_mode:
 
         if submitted:
             new_row = {
-                "Event Date": new_date.strftime("%d/%m/%Y"),
+                "Event Date": new_date.strftime("%d/%m/%Y"),  # Store as UK format
                 "Start Time": new_time,
                 "Venue": new_venue,
                 "Post code": new_postcode,
@@ -82,8 +84,8 @@ if edit_mode:
 
 # --- SAVE CHANGES ---
 if edit_mode and st.button("💾 Save Changes to File"):
-    if cover_filter != "All":
-        df.loc[df["Cover"] == cover_filter] = edited_df
+    if selected_member != "All":
+        df.loc[df["Cover"] == selected_member] = edited_df
     else:
         df = edited_df
 
