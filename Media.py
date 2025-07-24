@@ -7,14 +7,16 @@ EXCEL_FILE = "Media.xlsx"
 st.set_page_config(page_title="Media Team Dashboard", layout="wide")
 st.title("🎥 Media Team Dashboard")
 
-# Load data
+# --- LOAD DATA ---
 @st.cache_data
 def load_data():
-    return pd.read_excel(EXCEL_FILE)
+    df = pd.read_excel(EXCEL_FILE)
+    df["Event Date"] = pd.to_datetime(df["Event Date"], dayfirst=True).dt.strftime("%d/%m/%Y")
+    return df
 
 df = load_data()
 
-# Sidebar filter
+# --- SIDEBAR FILTER ---
 team_members = [
     "Alex Hulme",
     "Mike Melladay",
@@ -31,12 +33,12 @@ if selected_member != "All":
 else:
     filtered_df = df
 
-# Password entry for editing
+# --- PASSWORD FOR EDITING ---
 with st.expander("🔒 Edit Mode (Password Required)", expanded=False):
     password = st.text_input("Enter password", type="password")
     edit_mode = password == st.secrets.get("media_dashboard_password", "")
 
-# Show the main dashboard
+# --- DISPLAY EVENT TABLE ---
 st.subheader("📋 Scheduled Events")
 
 if edit_mode:
@@ -49,7 +51,7 @@ if edit_mode:
 else:
     st.dataframe(filtered_df, use_container_width=True)
 
-# Add new event form
+# --- ADD NEW ENTRY FORM ---
 if edit_mode:
     st.subheader("➕ Add New Event")
     with st.form("add_event_form", clear_on_submit=True):
@@ -68,7 +70,7 @@ if edit_mode:
 
         if submitted:
             new_row = {
-                "Event Date": new_date,
+                "Event Date": new_date.strftime("%d/%m/%Y"),  # Store as UK format
                 "Start Time": new_time,
                 "Venue": new_venue,
                 "Post code": new_postcode,
@@ -80,11 +82,12 @@ if edit_mode:
             df.to_excel(EXCEL_FILE, index=False)
             st.success("✅ New event added. Please refresh to view in the main table.")
 
-# Save edited data
+# --- SAVE CHANGES ---
 if edit_mode and st.button("💾 Save Changes to File"):
     if selected_member != "All":
         df.loc[df["Cover"] == selected_member] = edited_df
     else:
         df = edited_df
+
     df.to_excel(EXCEL_FILE, index=False)
     st.success("✅ Data saved successfully.")
